@@ -1,0 +1,28 @@
+project:
+  type: website
+  output-dir: _site
+
+website:
+  title: "Demo SNIIM Mexico"
+  description: "Interactive demo for scraping sugar prices from Mexico's SNIIM data portal"
+  navbar:
+    left:
+      - href: index.qmd
+        text: Home
+    right:
+      - icon: github
+        href: https://github.com/dar4datascience/Demo-SNIIM-Mexico
+        aria-label: GitHub
+
+filters:
+  - shinylive
+
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    code-fold: true
+    code-tools: true
+    highlight-style: github
+    smooth-scroll: true
