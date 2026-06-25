@@ -22,7 +22,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           pip install --upgrade pip
-          pip install requests beautifulsoup4 lxml pandas matplotlib shiny jupyter pyyaml
+          pip install requests beautifulsoup4 lxml pandas matplotlib shiny shinylive jupyter pyyaml
 
       - name: Set up Quarto
         uses: quarto-dev/quarto-actions/setup@v2
