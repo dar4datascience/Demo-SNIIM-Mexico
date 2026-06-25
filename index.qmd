@@ -299,14 +299,13 @@ Choose a market, pick a month and year, and click **Fetch Data** to see live pri
 ::: {.callout-important}
 ## Live network request from your browser
 
-Shinylive sends the HTTP request from inside your browser session. If SNIIM is unavailable or returns an error, the app will show a message explaining the issue.
+Shinylive runs Python in WebAssembly — all HTTP calls go through the browser's `fetch` API, which enforces CORS. Since SNIIM's server does not send `Access-Control-Allow-Origin` headers, requests are routed through [corsproxy.io](https://corsproxy.io) as a transparent relay. If SNIIM is unavailable or the proxy is rate-limited, the app will display the error message.
 :::
 
 ```{shinylive-python}
 #| standalone: true
 #| viewerHeight: 700
 
-import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urlencode
 import pandas as pd
@@ -316,14 +315,19 @@ from shiny import App, ui, render, reactive
 
 SEARCH_URL  = "https://www.economia-sniim.gob.mx/Sniim-anANT/e_SelAzu.asp"
 RESULTS_URL = "https://www.economia-sniim.gob.mx/Sniim-anANT/e_Azucar03.asp"
-HEADERS = {"User-Agent": "Mozilla/5.0", "Accept-Language": "es-MX,es;q=0.9"}
+CORS_PROXY  = "https://corsproxy.io/?url="
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
-def fetch_markets():
-    r = requests.get(SEARCH_URL, headers=HEADERS, timeout=20)
-    r.raise_for_status()
-    soup = BeautifulSoup(r.text, "html.parser")
+def proxied(url: str) -> str:
+    """Prefix a URL with the CORS proxy so browser fetch can reach SNIIM."""
+    return CORS_PROXY + url
+
+async def fetch_markets():
+    from pyodide.http import pyfetch
+    r = await pyfetch(proxied(SEARCH_URL))
+    html = await r.string()
+    soup = BeautifulSoup(html, "html.parser")
     select = soup.find("select", {"name": "mercado"})
     if not select:
         return []
@@ -426,7 +430,7 @@ def server(input, output, session):
     @reactive.effect
     async def _load_markets():
         try:
-            markets = fetch_markets()
+            markets = await fetch_markets()
             choices = {m["id"]: f"{m['id']} — {m['label']}" for m in markets}
             ui.update_select("market_id", choices=choices, selected="100")
         except Exception as e:
@@ -438,9 +442,10 @@ def server(input, output, session):
 
     @reactive.effect
     @reactive.event(input.fetch)
-    def _fetch():
+    async def _fetch():
         error_msg.set("")
         try:
+            from pyodide.http import pyfetch
             url = build_url(
                 input.market_id(),
                 str(input.month()).zfill(2),
@@ -448,9 +453,9 @@ def server(input, output, session):
                 str(input.day_start()).zfill(2),
                 str(input.day_end()).zfill(2),
             )
-            r = requests.get(url, headers=HEADERS, timeout=30)
-            r.raise_for_status()
-            df = parse_html(r.text)
+            r = await pyfetch(proxied(url))
+            html = await r.string()
+            df = parse_html(html)
             result.set(df)
             if df.empty:
                 error_msg.set("No data returned for this query.")
